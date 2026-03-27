@@ -1,13 +1,8 @@
 from __future__ import annotations
-
-import asyncio
-import importlib
-import sys
-import types
-import pytest
+import text_chunker
 from unittest import mock
-import scrape_and_vectorize_content
-from scrape_and_vectorize_content import TextChunker, Scraper, IndexingPipeline
+from mock import MagicMock
+from text_chunker import TextChunker
 
 
 class FakeDocument:
@@ -51,10 +46,23 @@ class FakeRecursiveCharacterTextSplitter:
 
 
 class TestTextChunker:
+    def setup_method(self):
+        self.input_documents = [
+            FakeDocument(
+                page_content="abcdefghijklmnop",
+                metadata={"source": "https://example.com"},
+            )
+        ]
+
     def test_chunker(self):
         with mock.patch.object(
-            scrape_and_vectorize_content.RecursiveCharacterTextSplitter,
-            "splitter",
-            FakeRecursiveCharacterTextSplitter,
-        ):
-            pass
+            text_chunker,
+            "RecursiveCharacterTextSplitter",
+        ) as MockSplitter:
+            # configure mock here
+            print()
+            print(f"class: {MockSplitter}")
+            print(f"return value: {MockSplitter.return_value}")
+
+            chunker = TextChunker(chunk_size=8, chunk_overlap=2)
+            chunks = chunker.chunk_documents(self.input_documents)
