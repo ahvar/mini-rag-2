@@ -6,6 +6,7 @@ import sys
 import types
 import pytest
 from unittest import mock
+import scrape_and_vectorize_content
 from scrape_and_vectorize_content import TextChunker, Scraper, IndexingPipeline
 
 
@@ -52,6 +53,8 @@ class FakeRecursiveCharacterTextSplitter:
 class TestTextChunker:
     def test_chunker(self):
         with mock.patch.object(
-            TextChunker, "splitter", FakeRecursiveCharacterTextSplitter
+            scrape_and_vectorize_content.RecursiveCharacterTextSplitter,
+            "splitter",
+            FakeRecursiveCharacterTextSplitter,
         ):
             pass
