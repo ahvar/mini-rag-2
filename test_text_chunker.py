@@ -4,6 +4,8 @@ from unittest import mock
 from mock import MagicMock
 from text_chunker import TextChunker
 
+import pytest
+
 
 class FakeDocument:
     def __init__(self, page_content: str, metadata: dict | None = None) -> None:
@@ -45,6 +47,20 @@ class FakeRecursiveCharacterTextSplitter:
         return split_docs
 
 
+@pytest.fixture()
+def mock_splitter():
+    with mock.patch.object(
+        text_chunker, "RecursiveCharacterTextSplitter", autospec=True
+    ) as MockSplitter:
+        yield MockSplitter.return_value
+
+
+@pytest.fixture()
+def mock_document():
+    with mock.patch.object(text_chunker, "Document", autospec=True) as MockDocument:
+        yield MockDocument.return_value
+
+
 class TestTextChunker:
     def setup_method(self):
         self.input_documents = [
@@ -54,15 +70,7 @@ class TestTextChunker:
             )
         ]
 
-    def test_chunker(self):
-        with mock.patch.object(
-            text_chunker,
-            "RecursiveCharacterTextSplitter",
-        ) as MockSplitter:
-            # configure mock here
-            print()
-            print(f"class: {MockSplitter}")
-            print(f"return value: {MockSplitter.return_value}")
+    def test_chunker(self, mock_splitter, mock_document):
+        pass
 
-            chunker = TextChunker(chunk_size=8, chunk_overlap=2)
-            chunks = chunker.chunk_documents(self.input_documents)
+        # test here
