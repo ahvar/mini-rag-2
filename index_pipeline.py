@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import os
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from pinecone import Pinecone
-from polite_scraper import Scraper
+from polite_scraper import DEFAULT_URLS, Scraper
 from text_chunker import TextChunker, IndexedChunk
 
 ROOT_DIR = Path(__file__).resolve().parents[2]

@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from functools import partial
-from unittest import mock
-
-import pytest
-import text_chunker
-from text_chunker import Document, RecursiveCharacterTextSplitter, TextChunker
+from text_chunker import TextChunker
 
 
 class TestTextChunker:
