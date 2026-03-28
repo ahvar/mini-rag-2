@@ -1,5 +1,6 @@
 import pytest
 import text_chunker
+import polite_scraper
 from unittest import mock
 from functools import partial
 from text_chunker import TextChunker
@@ -63,6 +64,34 @@ def mock_splitter():
         )
 
         yield MockSplitter, splitter_instance
+
+
+@pytest.fixture
+def mock_web_loader():
+    MockWebBaseLoader = mock.Mock(name="WebBaseLoader")
+
+    with mock.patch.object(
+        polite_scraper,
+        "WebBaseLoader",
+        MockWebBaseLoader,
+    ):
+        loader_instance = MockWebBaseLoader.return_value
+        loader_instance.aload = mock.AsyncMock(name="aload", return_value=[])
+        yield MockWebBaseLoader, loader_instance
+
+
+@pytest.fixture
+def mock_soup_strainer():
+    MockSoupStrainer = mock.Mock(name="SoupStrainer")
+
+    with mock.patch.object(
+        polite_scraper,
+        "SoupStrainer",
+        MockSoupStrainer,
+    ):
+        parse_only = object()
+        MockSoupStrainer.return_value = parse_only
+        yield MockSoupStrainer, parse_only
 
 
 @pytest.fixture
