@@ -16,6 +16,20 @@ DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_EMBEDDING_DIMENSIONS = 512
 DEFAULT_BATCH_SIZE = 100
 
+DEFAULT_URLS = [
+    "https://react.dev/learn",
+    "https://react.dev/reference/react/useState",
+    "https://react.dev/reference/react/useEffect",
+    "https://nextjs.org/docs/getting-started",
+    "https://nextjs.org/docs/app/building-your-application/routing",
+    "https://nextjs.org/docs/app/building-your-application/data-fetching",
+    "https://www.typescriptlang.org/docs/handbook/2/basic-types.html",
+    "https://sdk.vercel.ai/docs/ai-sdk-core/generating-text",
+    "https://github.com/vercel/ai",
+    "https://github.com/pinecone-io/pinecone-ts-client",
+    "https://lilianweng.github.io/posts/2023-06-23-agent/",
+]
+
 
 def load_environment() -> None:
     """Load local environment variables for OpenAI and Pinecone clients."""
