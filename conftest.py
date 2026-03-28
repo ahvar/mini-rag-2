@@ -1,9 +1,11 @@
+import os
+from functools import partial
+from unittest import mock
+
+import index_pipeline
+import polite_scraper
 import pytest
 import text_chunker
-import polite_scraper
-from unittest import mock
-from functools import partial
-from text_chunker import TextChunker
 
 
 def make_mock_document(page_content: str, metadata: dict | None = None):
@@ -92,6 +94,51 @@ def mock_soup_strainer():
         parse_only = object()
         MockSoupStrainer.return_value = parse_only
         yield MockSoupStrainer, parse_only
+
+
+@pytest.fixture
+def mock_openai_embeddings():
+    MockOpenAIEmbeddings = mock.Mock(name="OpenAIEmbeddings")
+
+    with mock.patch.object(
+        index_pipeline,
+        "OpenAIEmbeddings",
+        MockOpenAIEmbeddings,
+    ):
+        embeddings_instance = MockOpenAIEmbeddings.return_value
+        embeddings_instance.aembed_documents = mock.AsyncMock(
+            name="aembed_documents",
+            return_value=[],
+        )
+        yield MockOpenAIEmbeddings, embeddings_instance
+
+
+@pytest.fixture
+def mock_pinecone():
+    MockPinecone = mock.Mock(name="Pinecone")
+
+    with mock.patch.object(
+        index_pipeline,
+        "Pinecone",
+        MockPinecone,
+    ):
+        pinecone_client = MockPinecone.return_value
+        index_instance = mock.Mock(name="PineconeIndex")
+        pinecone_client.Index.return_value = index_instance
+        yield MockPinecone, pinecone_client, index_instance
+
+
+@pytest.fixture
+def mock_index_pipeline_environment():
+    with mock.patch.dict(
+        os.environ,
+        {
+            "PINECONE_API_KEY": "test-pinecone-key",
+            "PINECONE_INDEX": "test-index",
+        },
+        clear=False,
+    ):
+        yield
 
 
 @pytest.fixture
