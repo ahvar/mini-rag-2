@@ -19,19 +19,6 @@ DEFAULT_PARSE_CLASSES = (
     "docs-wrapper",
     "docs-content",
 )
-DEFAULT_URLS = [
-    "https://react.dev/learn",
-    "https://react.dev/reference/react/useState",
-    "https://react.dev/reference/react/useEffect",
-    "https://nextjs.org/docs/getting-started",
-    "https://nextjs.org/docs/app/building-your-application/routing",
-    "https://nextjs.org/docs/app/building-your-application/data-fetching",
-    "https://www.typescriptlang.org/docs/handbook/2/basic-types.html",
-    "https://sdk.vercel.ai/docs/ai-sdk-core/generating-text",
-    "https://github.com/vercel/ai",
-    "https://github.com/pinecone-io/pinecone-ts-client",
-    "https://lilianweng.github.io/posts/2023-06-23-agent/",
-]
 
 
 class Scraper:
