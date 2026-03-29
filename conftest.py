@@ -2,10 +2,10 @@ import os
 from functools import partial
 from unittest import mock
 
-import index_pipeline
-import polite_scraper
+import app.index_pipeline as index_pipeline
+import app.polite_scraper as polite_scraper
 import pytest
-import text_chunker
+import app.text_chunker as text_chunker
 
 
 def make_mock_document(page_content: str, metadata: dict | None = None):
