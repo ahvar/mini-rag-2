@@ -8,25 +8,20 @@ load_environment()
 async def main(urls=None):
     if urls is None:
         urls = ["https://react.dev/learn"]
+
+    # Prefer semantic containers first; many React.dev pages render content here.
     loader = WebBaseLoader(
         web_paths=urls,
         requests_per_second=1,
-        bs_kwargs={
-            "parse_only": SoupStrainer(class_=(
-                "post-content",
-                "post-title",
-                "post-header",
-                "content",
-                "article",
-                "article-content",
-                "markdown-body",
-                "main",
-                "docs-wrapper",
-                "docs-content",
-            )),
-        },
+        bs_kwargs={"parse_only": SoupStrainer(["main", "article"])},
     )
-    documents = await asyncio.to_thread(loader.load)
+    documents = await loader.aload()
+
+    # Fallback to parsing the full document if the filtered parse returns empty content.
+    if all(not doc.page_content.strip() for doc in documents):
+        loader = WebBaseLoader(web_paths=urls, requests_per_second=1)
+        documents = await loader.aload()
+
     print(documents)
 
 if __name__ == "__main__":
