@@ -40,6 +40,7 @@ def load_environment() -> None:
         load_dotenv(env_local_path)
     elif env_path.exists():
         load_dotenv(env_path)
+        print("loaded .env")
     else:
         load_dotenv()
 
