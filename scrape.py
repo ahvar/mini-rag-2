@@ -9,18 +9,22 @@ async def main(urls=None):
     if urls is None:
         urls = ["https://react.dev/learn"]
 
-    # Prefer semantic containers first; many React.dev pages render content here.
+    # Use sync load in a worker thread because WebBaseLoader.aload() internally
+    # calls asyncio.run(), which breaks when the caller already has an event loop.
     loader = WebBaseLoader(
         web_paths=urls,
         requests_per_second=1,
-        bs_kwargs={"parse_only": SoupStrainer(["main", "article"])},
     )
-    documents = await loader.aload()
+    documents = await asyncio.to_thread(loader.load)
 
-    # Fallback to parsing the full document if the filtered parse returns empty content.
+    # Fallback: if page content is empty, retry with semantic tag filtering.
     if all(not doc.page_content.strip() for doc in documents):
-        loader = WebBaseLoader(web_paths=urls, requests_per_second=1)
-        documents = await loader.aload()
+        loader = WebBaseLoader(
+            web_paths=urls,
+            requests_per_second=1,
+            bs_kwargs={"parse_only": SoupStrainer(["main", "article"])},
+        )
+        documents = await asyncio.to_thread(loader.load)
 
     print(documents)
 
