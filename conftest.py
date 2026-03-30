@@ -78,7 +78,7 @@ def mock_web_loader():
         MockWebBaseLoader,
     ):
         loader_instance = MockWebBaseLoader.return_value
-        loader_instance.aload = mock.AsyncMock(name="aload", return_value=[])
+        loader_instance.load = mock.Mock(name="load", return_value=[])
         yield MockWebBaseLoader, loader_instance
 
 

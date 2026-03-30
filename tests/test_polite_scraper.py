@@ -12,9 +12,8 @@ class TestPoliteScraper:
     ):
         source_url = "https://example.com/article"
         MockWebBaseLoader, loader_instance = mock_web_loader
-        MockSoupStrainer, parse_only = mock_soup_strainer
-
-        loader_instance.aload.return_value = [
+        MockSoupStrainer, _ = mock_soup_strainer
+        loader_instance.load.return_value = [
             mock_document(
                 page_content="  Hello    world\nfrom   scraper.  ",
                 metadata={"title": "Example title", "author": "A. Writer"},
@@ -29,13 +28,12 @@ class TestPoliteScraper:
 
         documents = asyncio.run(scraper._load_single_url(url=source_url, position=0))
 
-        MockSoupStrainer.assert_called_once_with(class_=scraper.parse_classes)
         MockWebBaseLoader.assert_called_once_with(
             web_paths=(source_url,),
             requests_per_second=3,
-            bs_kwargs={"parse_only": parse_only},
         )
-        loader_instance.aload.assert_awaited_once()
+        loader_instance.load.assert_called_once_with()
+        MockSoupStrainer.assert_not_called()
 
         assert len(documents) == 1
         assert documents[0].page_content == "Hello world from scraper."
