@@ -1,6 +1,5 @@
 from app.index_pipeline import load_environment
-from bs4 import SoupStrainer
-from langchain_community.document_loaders import WebBaseLoader
+from app.polite_scraper import Scraper
 import asyncio
 
 load_environment()
@@ -8,25 +7,14 @@ load_environment()
 async def main(urls=None):
     if urls is None:
         urls = ["https://react.dev/learn"]
-    loader = WebBaseLoader(
-        web_paths=urls,
+
+    scraper = Scraper(
+        max_concurrency=1,
         requests_per_second=1,
-        bs_kwargs={
-            "parse_only": SoupStrainer(class_=(
-                "post-content",
-                "post-title",
-                "post-header",
-                "content",
-                "article",
-                "article-content",
-                "markdown-body",
-                "main",
-                "docs-wrapper",
-                "docs-content",
-            )),
-        },
+        crawl_delay_seconds=0.0,
     )
-    documents = await asyncio.to_thread(loader.load)
+    documents = await scraper.load(urls)
+
     print(documents)
 
 if __name__ == "__main__":
