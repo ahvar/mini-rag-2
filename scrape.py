@@ -6,7 +6,7 @@ load_environment()
 
 async def main(urls=None):
     if urls is None:
-        urls = ["https://react.dev/learn"]
+        urls = ["https://react.dev/learn", "https://lilianweng.github.io/posts/2023-06-23-agent/"]
 
     scraper = Scraper(
         max_concurrency=1,
