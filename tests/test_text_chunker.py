@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.text_chunker import TextChunker
+from app.main.text_chunker import TextChunker
 
 
 class TestTextChunker:

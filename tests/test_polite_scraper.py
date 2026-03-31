@@ -1,6 +1,6 @@
 import asyncio
 
-from app.polite_scraper import Scraper
+from app.main.polite_scraper import Scraper
 
 
 class TestPoliteScraper:
