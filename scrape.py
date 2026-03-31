@@ -1,16 +1,12 @@
-from app.index_pipeline import (
-    DEFAULT_EMBEDDING_DIMENSIONS,
-    DEFAULT_EMBEDDING_MODEL,
-    load_environment,
-)
-from app.polite_scraper import Scraper
-from app.text_chunker import TextChunker
-from langchain_openai import OpenAIEmbeddings
-from pinecone import Pinecone
 import asyncio
-import os
 
-load_environment()
+from langchain_openai import OpenAIEmbeddings
+
+from app.main.index_pipeline import DEFAULT_EMBEDDING_DIMENSIONS, DEFAULT_EMBEDDING_MODEL
+from app.main.pinecone_client import PineconeClient
+from app.main.polite_scraper import Scraper
+from app.main.text_chunker import TextChunker
+from config import Config
 
 
 async def main(urls=None):
@@ -31,24 +27,21 @@ async def main(urls=None):
     chunks = chunker.chunk_documents(documents)
 
     print(f"Total chunks for embedding: {len(chunks)}")
-    for chunk in chunks:
-        print(chunk)
 
     embeddings_client = OpenAIEmbeddings(
         model=DEFAULT_EMBEDDING_MODEL,
         dimensions=DEFAULT_EMBEDDING_DIMENSIONS,
+        api_key=Config.OPENAI_API_KEY,
     )
     chunk_embeddings = await embeddings_client.aembed_documents(
         [chunk.content for chunk in chunks]
     )
 
-    print(f"Generated {len(chunk_embeddings)} embeddings")
-    for index, embedding in enumerate(chunk_embeddings):
-        print(f"chunk[{index}] embedding dimensions: {len(embedding)}")
-
-    pinecone_index_name = os.environ["PINECONE_INDEX"]
-    pinecone_namespace = os.getenv("PINECONE_NAMESPACE")
-    index = Pinecone(api_key=os.environ["PINECONE_API_KEY"]).Index(pinecone_index_name)
+    pinecone_client = PineconeClient(
+        api_key=Config.PINECONE_API_KEY,
+        index_name=Config.PINECONE_INDEX,
+        namespace=Config.PINECONE_NAMESPACE,
+    )
 
     vectors = [
         {
@@ -62,19 +55,11 @@ async def main(urls=None):
         for chunk, embedding in zip(chunks, chunk_embeddings, strict=True)
     ]
 
-    upsert_response = await asyncio.to_thread(
-        index.upsert,
-        vectors=vectors,
-        namespace=pinecone_namespace,
-    )
+    upsert_response = await pinecone_client.upsert_vectors(vectors)
     print(f"Pinecone upsert response: {upsert_response}")
 
     sample_id = chunks[0].id
-    fetch_response = await asyncio.to_thread(
-        index.fetch,
-        ids=[sample_id],
-        namespace=pinecone_namespace,
-    )
+    fetch_response = await pinecone_client.fetch_vectors(ids=[sample_id])
     fetched_vectors = (
         fetch_response.get("vectors", {})
         if isinstance(fetch_response, dict)
