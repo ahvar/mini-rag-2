@@ -1,12 +1,16 @@
 import asyncio
 from unittest import mock
-
+from test_config import TestConfig
+from app import create_app
 from app.main.index_pipeline import IndexingPipeline
 
 
 class TestIndexPipeline:
 
     def setup_method(self):
+        self.app = create_app(TestConfig)
+        self.app_context = self.app.app_context()
+        self.app_context.push()
         self.scraper = mock.Mock(name="Scraper")
         self.scraper.load = mock.AsyncMock(
             return_value=[
@@ -15,6 +19,9 @@ class TestIndexPipeline:
         )
         self.chunker = mock.Mock(name="TextChunker")
         self.chunker.chunk_size = 100
+
+    def teardown_method(self):
+        self.app_context.pop()
 
     def test_index_urls(
         self,

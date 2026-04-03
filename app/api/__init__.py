@@ -1,4 +1,4 @@
 from flask import Blueprint
 
 bp = Blueprint("api", __name__)
-from app.api import test_rag
+from app.api import test_rag, errors
