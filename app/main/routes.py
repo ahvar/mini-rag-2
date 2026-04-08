@@ -1,8 +1,9 @@
+from flask import render_template
+
 from app.main import bp
-from flask import render_template, flash, redirect, url_for, request, current_app
 
 
-@bp.route("/", methods=["GET", "POST"])
-@bp.route("/index", methods=["GET", "POST"])
+@bp.route("/", methods=["GET"])
+@bp.route("/index", methods=["GET"])
 def index():
-    return "Hello, World!"
+    return render_template("index.html", messages=[])
