@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% import "bootstrap_wtf.html" as wtf %}
+{% block content %}
+    <!-- Example Questions Section -->
+    <div class="mt-5">
+        <h1>Open Interval</h1>
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <p class="lead">Example Questions:</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chat Interface -->
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">Ask About Something</div>
+                    <div class="card-body">
+                        <!-- Chat Messages Area -->
+                        <div class="flex-grow-1 overflow-auto mb-4" style="max-height: 60vh;" id="chat-container">
+                            <div id="messages-area">
+                                {% for message in messages %}
+                                <div class="d-flex {{ 'justify-content-end' if message.is_user else 'justify-content-start' }} mb-3">
+                                    <div class="card shadow-sm border-0" style="max-width: 75%;">
+                                        <div class="card-body">
+                                            <h6 class="text-primary mb-1">
+                                                {{ 'You' if message.is_user else 'Team-Monitor' }}:
+                                            </h6>
+                                            <!-- ✅ PRESERVE LINE BREAKS -->
+                                            <div class="ps-3" style="white-space: pre-line;">
+                                                {{ message.q if message.is_user else message.a }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Loading Indicator -->
+                        <div id="loading" class="text-center mb-3" style="display: none;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Processing...</span>
+                            </div>
+                        </div>
+
+                        <!-- Input Form -->
+                        <div class="d-flex gap-2">
+                            <form id="chat-form" method="POST" class="flex-grow-1">
+                                {{ form.hidden_tag() }}
+                                <div class="input-group">
+                                    <input type="text" name="message" id="message-input" class="form-control form-control-lg" 
+                                           placeholder="Write your message here..." required/>
+                                    <button type="submit" class="btn btn-primary btn-lg" id="send-button">Send</button>
+                                </div>
+                            </form>
+                            <form method="POST" action="/reset">
+                                {{ form.hidden_tag() }}
+                                <button type="submit" class="btn btn-outline-secondary btn-lg">New</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatForm = document.getElementById('chat-form');
+            const messageInput = document.getElementById('message-input');
+            const messagesArea = document.getElementById('messages-area');
+            const chatContainer = document.getElementById('chat-container');
+            const loadingIndicator = document.getElementById('loading');
+            const sendButton = document.getElementById('send-button');
+
+            function scrollToBottom() {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            // ✅ PROPERLY FORMAT MESSAGES WITH LINE BREAKS
+            function addMessage(message, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `d-flex ${isUser ? 'justify-content-end' : 'justify-content-start'} mb-3`;
+                
+                // ✅ ESCAPE HTML AND PRESERVE LINE BREAKS
+                const escapedMessage = message.replace(/&/g, '&amp;')
+                                              .replace(/</g, '&lt;')
+                                              .replace(/>/g, '&gt;')
+                                              .replace(/"/g, '&quot;')
+                                              .replace(/'/g, '&#39;');
+                
+                messageDiv.innerHTML = `
+                    <div class="card shadow-sm border-0" style="max-width: 75%;">
+                        <div class="card-body">
+                            <h6 class="text-primary mb-1">
+                                ${isUser ? 'You' : 'Team-Monitor'}:
+                            </h6>
+                            <div class="ps-3" style="white-space: pre-line;">
+                                ${escapedMessage}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                messagesArea.appendChild(messageDiv);
+                scrollToBottom();
+            }
+
+            function setLoading(show) {
+                loadingIndicator.style.display = show ? 'block' : 'none';
+                sendButton.disabled = show;
+                messageInput.disabled = show;
+            }
+
+            chatForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const message = messageInput.value.trim();
+                if (!message) return;
+
+                addMessage(message, true);
+                messageInput.value = '';
+                setLoading(true);
+
+                try {
+                    const formData = new FormData(chatForm);
+                    formData.set('message', message);
+
+                    const response = await fetch('/', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        addMessage(data.response);
+                    } else {
+                        addMessage(`Error: ${data.error}`);
+                    }
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    addMessage('Connection error. Please try again.');
+                } finally {
+                    setLoading(false);
+                    messageInput.focus();
+                }
+            });
+
+            messageInput.focus();
+            scrollToBottom();
+        });
+    </script>
+{% endblock %}

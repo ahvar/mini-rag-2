@@ -15,15 +15,14 @@ Usage:
 
 from __future__ import annotations
 
+
 from pathlib import Path
+import json
 
 import typer
 from openai import OpenAI
 
 from config import Config
-
-DEFAULT_MODEL = "gpt-4o-mini-2024-07-18"
-DEFAULT_JSONL_PATH = Path("data/linkedin_training.jsonl")
 
 cli = typer.Typer(help="Upload fine-tuning data and create an OpenAI fine-tuning job.")
 
@@ -47,17 +46,39 @@ def create_fine_tuning_job(client: OpenAI, file_id: str, model: str) -> str:
     return job.id
 
 
+def validate_training_data(ctx: typer.Context, training_data_filepath: Path = None):
+    if training_data_filepath is None:
+        raise typer.BadParameter("No file path provided.")
+    if not training_data_filepath.exists():
+        raise typer.BadParameter(f"File not found: {training_data_filepath}")
+    try:
+        with training_data_filepath.open("r", encoding="utf-8") as f:
+            for i, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    json.loads(line)
+                except Exception as e:
+                    raise typer.BadParameter(f"Invalid JSON on line {i}: {e}")
+    except Exception as e:
+        raise typer.BadParameter(f"Error reading file: {e}")
+    return training_data_filepath
+
+
 @cli.command()
 def main(
+    ctx: typer.Context,
     file: Path = typer.Option(
-        DEFAULT_JSONL_PATH,
+        Path(Config.DEFAULT_JSONL_PATH),
         "--file",
-        help=f"Path to JSONL training file (default: {DEFAULT_JSONL_PATH})",
+        callback=validate_training_data,
+        help=f"Path to JSONL training file (default: {Config.DEFAULT_JSONL_PATH})",
     ),
     model: str = typer.Option(
-        DEFAULT_MODEL,
+        Config.BASE_MODEL,
         "--model",
-        help=f"Base model for fine-tuning (default: {DEFAULT_MODEL})",
+        help=f"Base model for fine-tuning (default: {Config.BASE_MODEL})\n(Set BASE_MODEL in your .env; after fine-tuning, update OPENAI_FINETUNED_MODEL for inference)",
     ),
 ) -> None:
     """Upload training data and start a fine-tuning job."""
@@ -66,13 +87,8 @@ def main(
         typer.echo("Please set OPENAI_API_KEY environment variable")
         raise typer.Exit(code=1)
 
-    file_path = file.resolve()
-    if not file_path.exists():
-        typer.echo(f"Training data file not found: {file_path}")
-        raise typer.Exit(code=1)
-
     client = OpenAI(api_key=api_key)
-    file_id = upload_training_file(client, file_path)
+    file_id = upload_training_file(client, file)
     create_fine_tuning_job(client, file_id=file_id, model=model)
 
 
