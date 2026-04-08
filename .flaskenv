@@ -1,1 +1,1 @@
-FLASK_APP=flask_shell_ctx
+FLASK_APP=flask_shell_ctx.py

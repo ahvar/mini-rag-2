@@ -1,9 +1,18 @@
 import asyncio
-
-from app.polite_scraper import Scraper
+from test_config import TestConfig
+from app import create_app
+from app.main.polite_scraper import Scraper
 
 
 class TestPoliteScraper:
+    def setup_method(self):
+        self.app = create_app(TestConfig)
+        self.app_context = self.app.app_context()
+        self.app_context.push()
+
+    def teardown_method(self):
+        self.app_context.pop()
+
     def test_load_single_url_returns_normalized_documents(
         self,
         mock_document,

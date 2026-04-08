@@ -1,9 +1,18 @@
 from __future__ import annotations
-
-from app.text_chunker import TextChunker
+from app import create_app
+from test_config import TestConfig
+from app.main.text_chunker import TextChunker
 
 
 class TestTextChunker:
+    def setup_method(self):
+        self.app = create_app(TestConfig)
+        self.app_context = self.app.app_context()
+        self.app_context.push()
+
+    def teardown_method(self):
+        self.app_context.pop()
+
     def test_chunker_uses_configured_mock_splitter(self, mock_document, mock_splitter):
         input_documents = [
             mock_document(

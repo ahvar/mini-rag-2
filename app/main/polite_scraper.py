@@ -1,8 +1,9 @@
-from typing import Sequence
 import asyncio
+from typing import Sequence
+
 from bs4 import SoupStrainer
-from langchain_core.documents import Document
 from langchain_community.document_loaders import WebBaseLoader
+from langchain_core.documents import Document
 
 DEFAULT_MAX_CONCURRENCY = 2
 DEFAULT_REQUESTS_PER_SECOND = 1
