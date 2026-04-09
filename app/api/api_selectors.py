@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import json
-
 from langchain_openai import OpenAIEmbeddings
 from openai import OpenAI
+from pydantic import BaseModel
 
 from app.agents.agent_config import agent_configs
 from app.agents.registry import get_agent
@@ -15,6 +14,11 @@ from flask import request, url_for, jsonify
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 512
+
+
+class AgentSelection(BaseModel):
+    agent: AgentType
+    query: str
 
 
 @bp.route("/api/test-rag/<query>", methods=["PUT"])
@@ -77,9 +81,9 @@ def select_agent(messages: list[Message]) -> tuple[AgentType, str]:
     )
 
     client = OpenAI(api_key=Config.OPENAI_API_KEY)
-    response = client.chat.completions.create(
+    response = client.beta.chat.completions.parse(
         model=Config.BASE_MODEL,
-        response_format={"type": "json_object"},
+        response_format=AgentSelection,
         temperature=0,
         messages=[
             {"role": "system", "content": selector_prompt},
@@ -95,13 +99,13 @@ def select_agent(messages: list[Message]) -> tuple[AgentType, str]:
         ],
     )
 
-    raw_content = response.choices[0].message.content or "{}"
-    parsed = json.loads(raw_content)
-    agent = parsed.get("agent", "rag")
-    query = parsed.get("query") or (messages[-1]["content"] if messages else "")
-
-    if agent not in {"linkedin", "rag"}:
-        agent = "rag"
+    parsed_selection = response.choices[0].message.parsed
+    agent = parsed_selection.agent if parsed_selection is not None else "rag"
+    query = (
+        parsed_selection.query
+        if parsed_selection is not None and parsed_selection.query
+        else (messages[-1]["content"] if messages else "")
+    )
 
     return agent, query
 
