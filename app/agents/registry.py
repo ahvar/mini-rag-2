@@ -7,7 +7,7 @@ from typing import Callable, Dict, cast
 from langchain_openai import OpenAIEmbeddings
 from openai import OpenAI
 
-from app.agents.types import AgentRequest, AgentResponse, AgentType
+from app.agents.agent_types import AgentRequest, AgentResponse, AgentType
 from app.main.pinecone_client import PineconeClient
 from config import Config
 
@@ -73,11 +73,23 @@ def rag_agent(request: AgentRequest) -> AgentResponse:
 
     contexts: list[dict] = []
     for match in matches or []:
-        metadata = match.get("metadata") if isinstance(match, dict) else getattr(match, "metadata", {})
+        metadata = (
+            match.get("metadata")
+            if isinstance(match, dict)
+            else getattr(match, "metadata", {})
+        )
         contexts.append(
             {
-                "id": match.get("id") if isinstance(match, dict) else getattr(match, "id", None),
-                "score": match.get("score") if isinstance(match, dict) else getattr(match, "score", None),
+                "id": (
+                    match.get("id")
+                    if isinstance(match, dict)
+                    else getattr(match, "id", None)
+                ),
+                "score": (
+                    match.get("score")
+                    if isinstance(match, dict)
+                    else getattr(match, "score", None)
+                ),
                 "metadata": metadata or {},
             }
         )

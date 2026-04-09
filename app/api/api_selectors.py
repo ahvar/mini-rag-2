@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import json
 
-from flask import jsonify, request
 from langchain_openai import OpenAIEmbeddings
 from openai import OpenAI
 
 from app.agents.agent_config import agent_configs
 from app.agents.registry import get_agent
-from app.agents.types import AgentRequest, AgentType, Message
+from app.agents.agent_types import AgentRequest, AgentType, Message
 from app.api import bp
 from app.main.pinecone_client import PineconeClient
 from config import Config
+from flask import request, url_for, jsonify
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 512
@@ -43,9 +43,21 @@ def test_rag(query: str):
 
     result = [
         {
-            "id": match.get("id") if isinstance(match, dict) else getattr(match, "id", None),
-            "score": match.get("score") if isinstance(match, dict) else getattr(match, "score", None),
-            "metadata": match.get("metadata") if isinstance(match, dict) else getattr(match, "metadata", {}),
+            "id": (
+                match.get("id")
+                if isinstance(match, dict)
+                else getattr(match, "id", None)
+            ),
+            "score": (
+                match.get("score")
+                if isinstance(match, dict)
+                else getattr(match, "score", None)
+            ),
+            "metadata": (
+                match.get("metadata")
+                if isinstance(match, dict)
+                else getattr(match, "metadata", {})
+            ),
         }
         for match in (matches or [])
     ]

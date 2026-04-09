@@ -5,7 +5,7 @@ from app.main.pinecone_client import PineconeClient
 from app.main.polite_scraper import Scraper
 from app.main.text_chunker import TextChunker
 
-from app.api import test_rag
+from app.api import api_selectors
 
 app = create_app()
 
