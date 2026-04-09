@@ -78,7 +78,7 @@ def select_agent(messages: list[Message]) -> tuple[AgentType, str]:
 
     client = OpenAI(api_key=Config.OPENAI_API_KEY)
     response = client.chat.completions.create(
-        model=Config.OPENAI_FINETUNED_MODEL or Config.BASE_MODEL,
+        model=Config.BASE_MODEL,
         response_format={"type": "json_object"},
         temperature=0,
         messages=[
