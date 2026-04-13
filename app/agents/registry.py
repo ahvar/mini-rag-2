@@ -8,6 +8,7 @@ from langchain_openai import OpenAIEmbeddings
 from openai import OpenAI
 
 from app.agents.agent_types import AgentRequest, AgentResponse, AgentType
+from app.agents.linkedin import linkedin_agent
 from app.main.pinecone_client import PineconeClient
 from config import Config
 
@@ -22,31 +23,6 @@ def _messages_to_openai(messages: list[dict]) -> list[dict[str, str]]:
         {"role": message.get("role", "user"), "content": message.get("content", "")}
         for message in messages
     ]
-
-
-def linkedin_agent(request: AgentRequest) -> AgentResponse:
-    client = OpenAI(api_key=Config.OPENAI_API_KEY)
-    system_prompt = (
-        "You are a LinkedIn writing assistant. Produce a polished, stylized LinkedIn post "
-        "with a strong hook, concise sections, and clear CTA. Keep fidelity with user intent."
-    )
-    completion = client.chat.completions.create(
-        model=Config.OPENAI_FINETUNED_MODEL or Config.BASE_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            *_messages_to_openai(request.messages),
-            {
-                "role": "user",
-                "content": (
-                    f"Original user request: {request.original_query}\n"
-                    f"Refined objective: {request.query}"
-                ),
-            },
-        ],
-        temperature=0.8,
-    )
-    content = completion.choices[0].message.content or ""
-    return AgentResponse(agent="linkedin", content=content)
 
 
 def rag_agent(request: AgentRequest) -> AgentResponse:
