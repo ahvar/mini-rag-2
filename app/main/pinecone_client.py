@@ -9,10 +9,13 @@ from pinecone import Pinecone
 class PineconeClient:
     """Small adapter around Pinecone index operations."""
 
-    def __init__(self, api_key: str, index_name: str, namespace: str | None = None) -> None:
+    def __init__(
+        self, api_key: str, index_name: str, namespace: str | None = None
+    ) -> None:
         self.index_name = index_name
         self.namespace = namespace
-        self.index = Pinecone(api_key=api_key).Index(index_name)
+        self.pc = Pinecone(api_key=api_key)
+        self.index = self.pc.Index(index_name)
 
     async def upsert_vectors(self, vectors: Sequence[dict[str, Any]]) -> Any:
         return await asyncio.to_thread(
@@ -52,4 +55,32 @@ class PineconeClient:
             self.index.fetch,
             ids=list(ids),
             namespace=self.namespace,
+        )
+
+    def rerank(
+        self,
+        model: str,
+        query: str,
+        documents: Sequence[str],
+        top_n: int = 3,
+        return_documents: bool = True,
+    ) -> Any:
+        """Rerank documents using Pinecone's inference API.
+
+        Args:
+            model: Reranking model name (e.g., 'bge-reranker-v2-m3')
+            query: The query to rerank against
+            documents: List of document texts to rerank
+            top_n: Number of top results to return after reranking
+            return_documents: Whether to return the document text
+
+        Returns:
+            Reranking response with data containing scored results
+        """
+        return self.pc.inference.rerank(
+            model=model,
+            query=query,
+            documents=list(documents),
+            top_n=top_n,
+            return_documents=return_documents,
         )

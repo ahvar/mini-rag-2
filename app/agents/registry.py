@@ -38,43 +38,52 @@ def rag_agent(request: AgentRequest) -> AgentResponse:
         index_name=Config.PINECONE_INDEX,
         namespace=Config.PINECONE_NAMESPACE,
     )
+    # Initial overfetch for reranking
     query_response = pinecone_client.query_vectors(
         vector=query_embedding,
-        top_k=Config.RAG_TOP_K,
+        top_k=Config.RAG_INITIAL_FETCH,
         include_metadata=True,
     )
     matches = getattr(query_response, "matches", None)
     if matches is None and isinstance(query_response, dict):
         matches = query_response.get("matches", [])
 
-    contexts: list[dict] = []
+    # Extract documents for reranking
+    documents = []
     for match in matches or []:
         metadata = (
             match.get("metadata")
             if isinstance(match, dict)
             else getattr(match, "metadata", {})
         )
-        contexts.append(
-            {
-                "id": (
-                    match.get("id")
-                    if isinstance(match, dict)
-                    else getattr(match, "id", None)
-                ),
-                "score": (
-                    match.get("score")
-                    if isinstance(match, dict)
-                    else getattr(match, "score", None)
-                ),
-                "metadata": metadata or {},
-            }
-        )
-
-    snippets = []
-    for item in contexts:
-        metadata = item.get("metadata", {})
         text = metadata.get("text") or metadata.get("chunk") or str(metadata)
-        snippets.append(f"- {text}")
+        if text:
+            documents.append(text)
+
+    # Rerank using Pinecone's inference API
+    reranked = pinecone_client.rerank(
+        model="bge-reranker-v2-m3",
+        query=request.query,
+        documents=documents,
+        top_n=Config.RAG_TOP_K,
+        return_documents=True,
+    )
+
+    # Build contexts from reranked results
+    contexts: list[dict] = []
+    snippets = []
+    for result in reranked.get("data", []):
+        document = result.get("document", {})
+        text = document.get("text", "")
+        if text:
+            snippets.append(f"- {text}")
+            contexts.append(
+                {
+                    "index": result.get("index"),
+                    "score": result.get("score"),
+                    "text": text,
+                }
+            )
 
     client = OpenAI(api_key=Config.OPENAI_API_KEY)
     completion = client.chat.completions.create(

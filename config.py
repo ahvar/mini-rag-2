@@ -20,4 +20,5 @@ class Config:
         "DEFAULT_JSONL_PATH", str(DATA_DIR / "linkedin_training.jsonl")
     )
     USER_AGENT = os.getenv("USER_AGENT")
+    RAG_INITIAL_FETCH = int(os.getenv("RAG_INITIAL_FETCH", "10"))
     RAG_TOP_K = int(os.getenv("RAG_TOP_K", "3"))
