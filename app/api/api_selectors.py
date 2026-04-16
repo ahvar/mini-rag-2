@@ -21,53 +21,6 @@ class AgentSelection(BaseModel):
     query: str
 
 
-@bp.route("/api/test-rag/<query>", methods=["PUT"])
-def test_rag(query: str):
-    embeddings_client = OpenAIEmbeddings(
-        model=EMBEDDING_MODEL,
-        dimensions=EMBEDDING_DIMENSIONS,
-        api_key=Config.OPENAI_API_KEY,
-    )
-    query_embedding = embeddings_client.embed_query(query)
-
-    pinecone_client = PineconeClient(
-        api_key=Config.PINECONE_API_KEY,
-        index_name=Config.PINECONE_INDEX,
-        namespace=Config.PINECONE_NAMESPACE,
-    )
-
-    query_response = pinecone_client.query_vectors(
-        vector=query_embedding,
-        top_k=Config.RAG_TOP_K,
-        include_metadata=True,
-    )
-    matches = getattr(query_response, "matches", None)
-    if matches is None and isinstance(query_response, dict):
-        matches = query_response.get("matches", [])
-
-    result = [
-        {
-            "id": (
-                match.get("id")
-                if isinstance(match, dict)
-                else getattr(match, "id", None)
-            ),
-            "score": (
-                match.get("score")
-                if isinstance(match, dict)
-                else getattr(match, "score", None)
-            ),
-            "metadata": (
-                match.get("metadata")
-                if isinstance(match, dict)
-                else getattr(match, "metadata", {})
-            ),
-        }
-        for match in (matches or [])
-    ]
-    return jsonify(result)
-
-
 def select_agent(messages: list[Message]) -> tuple[AgentType, str]:
     recent_messages = messages[-5:]
     agent_descriptions = "\n".join(
@@ -110,6 +63,24 @@ def select_agent(messages: list[Message]) -> tuple[AgentType, str]:
     return agent, query
 
 
+def normalize_messages(messages: list) -> list[Message]:
+    """Validate and normalize message list from request body.
+
+    Filters out invalid messages and ensures each message has:
+    - role: one of 'user', 'assistant', or 'system'
+    - content: a non-empty string
+    """
+    normalized: list[Message] = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role")
+        content = message.get("content")
+        if role in {"user", "assistant", "system"} and isinstance(content, str):
+            normalized.append({"role": role, "content": content})
+    return normalized
+
+
 @bp.route("/api/select-agent", methods=["POST"])
 def select_agent_route():
     try:
@@ -118,15 +89,7 @@ def select_agent_route():
         if not isinstance(messages, list) or len(messages) == 0:
             return jsonify({"error": "messages must be a non-empty list"}), 400
 
-        normalized_messages: list[Message] = []
-        for message in messages:
-            if not isinstance(message, dict):
-                continue
-            role = message.get("role")
-            content = message.get("content")
-            if role in {"user", "assistant", "system"} and isinstance(content, str):
-                normalized_messages.append({"role": role, "content": content})
-
+        normalized_messages = normalize_messages(messages)
         if not normalized_messages:
             return jsonify({"error": "no valid messages supplied"}), 400
 
@@ -147,15 +110,7 @@ def chat_route():
         if agent not in {"linkedin", "rag"}:
             return jsonify({"error": "agent must be one of linkedin or rag"}), 400
 
-        normalized_messages: list[Message] = []
-        for message in messages:
-            if not isinstance(message, dict):
-                continue
-            role = message.get("role")
-            content = message.get("content")
-            if role in {"user", "assistant", "system"} and isinstance(content, str):
-                normalized_messages.append({"role": role, "content": content})
-
+        normalized_messages = normalize_messages(messages)
         original_query = (
             normalized_messages[-1]["content"] if normalized_messages else str(query)
         )

@@ -7,7 +7,6 @@ from openai import OpenAI
 from app.agents.agent_types import AgentRequest, AgentResponse
 from config import Config
 
-
 SYSTEM_PROMPT = (
     "You are a professional linkedin copywriter to create high engagement "
     "linkedin posts"
@@ -16,11 +15,11 @@ SYSTEM_PROMPT = (
 
 def linkedin_agent(request: AgentRequest) -> AgentResponse:
     """Generate a LinkedIn post from user intent and selector-refined query.
-
-    TypeScript's Vercel AI SDK `streamText()` does not have a direct Python
-    equivalent in this project stack. We use the OpenAI Python SDK chat
-    completions API and return the generated text as the normalized
-    ``AgentResponse``.
+    NOTE:
+      - better to stream text; did not find Python option for this feature
+      - for example, TypeScript's Vercel AI SDK
+      - defaulting to OpenAI Python SDK chat completions API
+      - return generated text as the normalized 'AgentResponse'
     """
 
     model = Config.OPENAI_FINETUNED_MODEL
