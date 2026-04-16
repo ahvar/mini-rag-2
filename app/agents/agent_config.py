@@ -15,7 +15,7 @@ class AgentConfig:
 AgentType = str
 
 
-agent_configs: Dict[AgentType, AgentConfig] = {
+agent_configs = {
     "linkedin": AgentConfig(
         name="LinkedIn Agent",
         description="For writing posts in a certain voice and tone for LinkedIn",

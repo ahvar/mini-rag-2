@@ -79,7 +79,7 @@
             const text = messageInput.value.trim();
             if (!text) return;
 
-            addMessage(text, true);
+            addMessage(text, true); // render a chat message in UI
             messages.push({ role: 'user', content: text });
             messageInput.value = '';
             setLoading(true);
