@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from langchain_openai import OpenAIEmbeddings
 from openai import OpenAI
 from pydantic import BaseModel
 
 from app.agents.agent_config import agent_configs
-from app.agents.registry import get_agent
+from app.agents.registry import get_agent, get_streaming_agent
 from app.agents.agent_types import AgentRequest, AgentType, Message
 from app.api import bp
 from app.main.pinecone_client import PineconeClient
 from config import Config
-from flask import request, url_for, jsonify
+from flask import Response, jsonify, request, stream_with_context, url_for
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 512
@@ -81,6 +83,35 @@ def normalize_messages(messages: list) -> list[Message]:
     return normalized
 
 
+def _build_agent_request(body: dict) -> AgentRequest:
+    messages = body.get("messages", [])
+    agent = body.get("agent")
+    query = body.get("query", "")
+
+    if agent not in {"linkedin", "rag"}:
+        raise ValueError("agent must be one of linkedin or rag")
+
+    normalized_messages = normalize_messages(messages)
+    original_query = (
+        normalized_messages[-1]["content"] if normalized_messages else str(query)
+    )
+    return AgentRequest(
+        type=agent,
+        query=str(query or original_query),
+        original_query=original_query,
+        messages=normalized_messages,
+    )
+
+
+def _stream_chat_chunks(stream: Iterator[str]) -> Iterator[str]:
+    try:
+        for chunk in stream:
+            if chunk:
+                yield chunk
+    except Exception as exc:
+        yield f"\n\n[Streaming error: {exc}]"
+
+
 @bp.route("/api/select-agent", methods=["POST"])
 def select_agent_route():
     try:
@@ -103,25 +134,9 @@ def select_agent_route():
 def chat_route():
     try:
         body = request.get_json(silent=True) or {}
-        messages = body.get("messages", [])
-        agent = body.get("agent")
-        query = body.get("query", "")
+        request_obj = _build_agent_request(body)
 
-        if agent not in {"linkedin", "rag"}:
-            return jsonify({"error": "agent must be one of linkedin or rag"}), 400
-
-        normalized_messages = normalize_messages(messages)
-        original_query = (
-            normalized_messages[-1]["content"] if normalized_messages else str(query)
-        )
-        request_obj = AgentRequest(
-            type=agent,
-            query=str(query or original_query),
-            original_query=original_query,
-            messages=normalized_messages,
-        )
-
-        agent_executor = get_agent(agent)
+        agent_executor = get_agent(request_obj.type)
         result = agent_executor(request_obj)
         return jsonify(
             {
@@ -130,5 +145,24 @@ def chat_route():
                 "context": result.context or [],
             }
         )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         return jsonify({"error": f"Failed to process chat: {exc}"}), 500
+
+
+@bp.route("/api/chat-stream", methods=["POST"])
+def chat_stream_route():
+    try:
+        body = request.get_json(silent=True) or {}
+        request_obj = _build_agent_request(body)
+        agent_executor = get_streaming_agent(request_obj.type)
+
+        return Response(
+            stream_with_context(_stream_chat_chunks(agent_executor(request_obj))),
+            mimetype="text/plain",
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": f"Failed to process streaming chat: {exc}"}), 500

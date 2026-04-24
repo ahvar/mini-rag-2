@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest import mock
 
@@ -54,7 +55,9 @@ class TestApiSelectors:
             assert query == "summarize my LinkedIn profile"
 
     def test_select_agent_falls_back_when_no_parsed_output(self):
-        messages = [{"role": "user", "content": "What is retrieval augmented generation?"}]
+        messages = [
+            {"role": "user", "content": "What is retrieval augmented generation?"}
+        ]
 
         with (
             mock.patch("app.api.api_selectors.Config", TestConfig),
@@ -70,3 +73,43 @@ class TestApiSelectors:
             MockOpenAI.assert_called_once_with(api_key=TestConfig.OPENAI_API_KEY)
             assert agent == "rag"
             assert query == "What is retrieval augmented generation?"
+
+    def test_chat_stream_route_streams_chunks(self):
+        with mock.patch(
+            "app.api.api_selectors.get_streaming_agent"
+        ) as mock_get_streaming_agent:
+            mock_get_streaming_agent.return_value = lambda request: iter(
+                ["Hello", " world"]
+            )
+
+            response = self.app.test_client().post(
+                "/api/chat-stream",
+                data=json.dumps(
+                    {
+                        "messages": [{"role": "user", "content": "Hi there"}],
+                        "agent": "linkedin",
+                        "query": "Hi there",
+                    }
+                ),
+                content_type="application/json",
+            )
+
+            assert response.status_code == 200
+            assert response.mimetype == "text/plain"
+            assert response.get_data(as_text=True) == "Hello world"
+
+    def test_chat_stream_route_rejects_invalid_agent(self):
+        response = self.app.test_client().post(
+            "/api/chat-stream",
+            data=json.dumps(
+                {
+                    "messages": [{"role": "user", "content": "Hi there"}],
+                    "agent": "invalid",
+                    "query": "Hi there",
+                }
+            ),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 400
+        assert response.get_json() == {"error": "agent must be one of linkedin or rag"}

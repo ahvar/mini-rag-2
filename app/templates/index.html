@@ -48,24 +48,21 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `d-flex ${isUser ? 'justify-content-end' : 'justify-content-start'} mb-3`;
 
-            const escapedMessage = message.replace(/&/g, '&amp;')
-                                          .replace(/</g, '&lt;')
-                                          .replace(/>/g, '&gt;')
-                                          .replace(/"/g, '&quot;')
-                                          .replace(/'/g, '&#39;');
-
             messageDiv.innerHTML = `
                 <div class="card shadow-sm border-0" style="max-width: 80%;">
                     <div class="card-body">
                         <h6 class="text-primary mb-1">
                             ${isUser ? 'You' : (label || 'Assistant')}:
                         </h6>
-                        <div class="ps-3" style="white-space: pre-line;">${escapedMessage}</div>
+                        <div class="ps-3" style="white-space: pre-line;"></div>
                     </div>
                 </div>
             `;
+            const contentElement = messageDiv.querySelector('.ps-3');
+            contentElement.textContent = message;
             messagesArea.appendChild(messageDiv);
             scrollToBottom();
+            return contentElement;
         }
 
         function setLoading(show) {
@@ -79,7 +76,7 @@
             const text = messageInput.value.trim();
             if (!text) return;
 
-            addMessage(text, true); // render a chat message in UI
+            addMessage(text, true);
             messages.push({ role: 'user', content: text });
             messageInput.value = '';
             setLoading(true);
@@ -95,7 +92,10 @@
                     throw new Error(selectorData.error || 'Selector failed');
                 }
 
-                const chatResponse = await fetch('/api/chat', {
+                const agentLabel = selectorData.agent === 'linkedin' ? 'LinkedIn Agent' : 'RAG Agent';
+                const assistantContent = addMessage('Thinking...', false, agentLabel);
+
+                const chatResponse = await fetch('/api/chat-stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -104,14 +104,32 @@
                         query: selectorData.query
                     })
                 });
-                const chatData = await chatResponse.json();
                 if (!chatResponse.ok) {
+                    const chatData = await chatResponse.json();
                     throw new Error(chatData.error || 'Chat failed');
                 }
 
-                messages.push({ role: 'assistant', content: chatData.response });
-                const agentLabel = chatData.agent === 'linkedin' ? 'LinkedIn Agent' : 'RAG Agent';
-                addMessage(chatData.response, false, agentLabel);
+                const reader = chatResponse.body && chatResponse.body.getReader();
+                if (!reader) {
+                    throw new Error('Streaming is not available in this browser');
+                }
+
+                const decoder = new TextDecoder();
+                let assistantText = '';
+                assistantContent.textContent = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    assistantText += decoder.decode(value, { stream: true });
+                    assistantContent.textContent = assistantText;
+                    scrollToBottom();
+                }
+
+                assistantText += decoder.decode();
+                assistantContent.textContent = assistantText;
+                messages.push({ role: 'assistant', content: assistantText });
             } catch (error) {
                 console.error(error);
                 addMessage(`Error: ${error.message}`);
