@@ -16,6 +16,7 @@ from flask import Response, jsonify, request, stream_with_context, url_for
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 512
+STREAMING_ERROR_MESSAGE = "\n\n[Streaming error]"
 
 
 class AgentSelection(BaseModel):
@@ -83,6 +84,15 @@ def normalize_messages(messages: list) -> list[Message]:
     return normalized
 
 
+def _get_request_body() -> dict:
+    body = request.get_json(silent=True)
+    if body is None:
+        return {}
+    if not isinstance(body, dict):
+        raise ValueError("request body must be a JSON object")
+    return body
+
+
 def _build_agent_request(body: dict) -> AgentRequest:
     messages = body.get("messages", [])
     agent = body.get("agent")
@@ -108,14 +118,14 @@ def _stream_chat_chunks(stream: Iterator[str]) -> Iterator[str]:
         for chunk in stream:
             if chunk:
                 yield chunk
-    except Exception as exc:
-        yield f"\n\n[Streaming error: {exc}]"
+    except Exception:
+        yield STREAMING_ERROR_MESSAGE
 
 
 @bp.route("/api/select-agent", methods=["POST"])
 def select_agent_route():
     try:
-        body = request.get_json(silent=True) or {}
+        body = _get_request_body()
         messages = body.get("messages", [])
         if not isinstance(messages, list) or len(messages) == 0:
             return jsonify({"error": "messages must be a non-empty list"}), 400
@@ -133,7 +143,7 @@ def select_agent_route():
 @bp.route("/api/chat", methods=["POST"])
 def chat_route():
     try:
-        body = request.get_json(silent=True) or {}
+        body = _get_request_body()
         request_obj = _build_agent_request(body)
 
         agent_executor = get_agent(request_obj.type)
@@ -147,14 +157,14 @@ def chat_route():
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    except Exception as exc:
-        return jsonify({"error": f"Failed to process chat: {exc}"}), 500
+    except Exception:
+        return jsonify({"error": "Failed to process chat"}), 500
 
 
 @bp.route("/api/chat-stream", methods=["POST"])
 def chat_stream_route():
     try:
-        body = request.get_json(silent=True) or {}
+        body = _get_request_body()
         request_obj = _build_agent_request(body)
         agent_executor = get_streaming_agent(request_obj.type)
 
@@ -164,5 +174,5 @@ def chat_stream_route():
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    except Exception as exc:
-        return jsonify({"error": f"Failed to process streaming chat: {exc}"}), 500
+    except Exception:
+        return jsonify({"error": "Failed to process streaming chat"}), 500

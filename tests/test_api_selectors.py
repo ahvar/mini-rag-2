@@ -99,17 +99,21 @@ class TestApiSelectors:
             assert response.get_data(as_text=True) == "Hello world"
 
     def test_chat_stream_route_rejects_invalid_agent(self):
-        response = self.app.test_client().post(
-            "/api/chat-stream",
-            data=json.dumps(
-                {
-                    "messages": [{"role": "user", "content": "Hi there"}],
-                    "agent": "invalid",
-                    "query": "Hi there",
-                }
-            ),
-            content_type="application/json",
-        )
+        with mock.patch("app.api.api_selectors.get_streaming_agent") as mock_get_agent:
+            response = self.app.test_client().post(
+                "/api/chat-stream",
+                data=json.dumps(
+                    {
+                        "messages": [{"role": "user", "content": "Hi there"}],
+                        "agent": "invalid",
+                        "query": "Hi there",
+                    }
+                ),
+                content_type="application/json",
+            )
 
-        assert response.status_code == 400
-        assert response.get_json() == {"error": "agent must be one of linkedin or rag"}
+            assert response.status_code == 400
+            assert response.get_json() == {
+                "error": "agent must be one of linkedin or rag"
+            }
+            mock_get_agent.assert_not_called()

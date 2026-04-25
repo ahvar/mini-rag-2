@@ -1,145 +1,60 @@
 {% extends "base.html" %}
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+{% endblock %}
 {% block content %}
-<div class="mt-5">
-    <h1>Open Interval Assistant</h1>
+<section class="chat-page">
+    <div class="chat-shell">
+        <header class="chat-hero">
+            <span class="chat-eyebrow">Terminal Session</span>
+            <h1 class="chat-title">Open Interval Console</h1>
+            <p class="chat-subtitle">
+                Route technical prompts through retrieval and LinkedIn requests through the writing agent inside a retro terminal shell.
+            </p>
+        </header>
 
-    <div class="row mt-4">
-        <div class="col-md-9">
-            <div class="card">
-                <div class="card-header">Chat</div>
-                <div class="card-body">
-                    <div class="flex-grow-1 overflow-auto mb-4" style="max-height: 60vh;" id="chat-container">
-                        <div id="messages-area"></div>
-                    </div>
-
-                    <div id="loading" class="text-center mb-3" style="display: none;">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Processing...</span>
-                        </div>
-                    </div>
-
-                    <form id="chat-form" class="d-flex gap-2">
-                        <input type="text" id="message-input" class="form-control form-control-lg"
-                               placeholder="Ask a technical question or request a LinkedIn post..." required/>
-                        <button type="submit" class="btn btn-primary btn-lg" id="send-button">Send</button>
-                    </form>
+        <section class="chat-panel" aria-label="Assistant chat panel">
+            <header class="chat-panel__header">
+                <div class="chat-panel__chrome" aria-hidden="true">
+                    <span class="chat-panel__dot"></span>
+                    <span class="chat-panel__dot"></span>
+                    <span class="chat-panel__dot"></span>
                 </div>
+                <div>
+                    <h2 class="chat-panel__title">oi-shell@local: ~/assistant</h2>
+                    <p class="chat-panel__meta">Use a technical question for the RAG path or ask for a post to trigger the LinkedIn agent.</p>
+                </div>
+                <div class="chat-status-pill" id="chat-status" data-state="ready">Ready</div>
+            </header>
+
+            <div class="chat-transcript" id="chat-container">
+                <div class="chat-messages" id="messages-area"></div>
             </div>
-        </div>
-    </div>
-</div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const chatForm = document.getElementById('chat-form');
-        const messageInput = document.getElementById('message-input');
-        const messagesArea = document.getElementById('messages-area');
-        const chatContainer = document.getElementById('chat-container');
-        const loadingIndicator = document.getElementById('loading');
-        const sendButton = document.getElementById('send-button');
+            <div class="chat-loading" id="loading" aria-live="polite">
+                <span class="chat-loading__pulse" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span>Awaiting stream output...</span>
+            </div>
 
-        const messages = [];
-
-        function scrollToBottom() {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        function addMessage(message, isUser = false, label = null) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `d-flex ${isUser ? 'justify-content-end' : 'justify-content-start'} mb-3`;
-
-            messageDiv.innerHTML = `
-                <div class="card shadow-sm border-0" style="max-width: 80%;">
-                    <div class="card-body">
-                        <h6 class="text-primary mb-1">
-                            ${isUser ? 'You' : (label || 'Assistant')}:
-                        </h6>
-                        <div class="ps-3" style="white-space: pre-line;"></div>
-                    </div>
+            <form id="chat-form" class="chat-composer">
+                <div class="chat-composer__row">
+                    <label class="chat-composer__prompt" for="message-input">guest@oi:~$</label>
+                    <textarea
+                        id="message-input"
+                        class="form-control chat-composer__input"
+                        rows="1"
+                        placeholder="Ask a technical question or request a LinkedIn post..."
+                        required></textarea>
+                    <button type="submit" class="chat-composer__button" id="send-button">Send</button>
                 </div>
-            `;
-            const contentElement = messageDiv.querySelector('.ps-3');
-            contentElement.textContent = message;
-            messagesArea.appendChild(messageDiv);
-            scrollToBottom();
-            return contentElement;
-        }
-
-        function setLoading(show) {
-            loadingIndicator.style.display = show ? 'block' : 'none';
-            sendButton.disabled = show;
-            messageInput.disabled = show;
-        }
-
-        chatForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const text = messageInput.value.trim();
-            if (!text) return;
-
-            addMessage(text, true);
-            messages.push({ role: 'user', content: text });
-            messageInput.value = '';
-            setLoading(true);
-
-            try {
-                const selectorResponse = await fetch('/api/select-agent', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ messages })
-                });
-                const selectorData = await selectorResponse.json();
-                if (!selectorResponse.ok) {
-                    throw new Error(selectorData.error || 'Selector failed');
-                }
-
-                const agentLabel = selectorData.agent === 'linkedin' ? 'LinkedIn Agent' : 'RAG Agent';
-                const assistantContent = addMessage('Thinking...', false, agentLabel);
-
-                const chatResponse = await fetch('/api/chat-stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        messages,
-                        agent: selectorData.agent,
-                        query: selectorData.query
-                    })
-                });
-                if (!chatResponse.ok) {
-                    const chatData = await chatResponse.json();
-                    throw new Error(chatData.error || 'Chat failed');
-                }
-
-                const reader = chatResponse.body && chatResponse.body.getReader();
-                if (!reader) {
-                    throw new Error('Streaming is not available in this browser');
-                }
-
-                const decoder = new TextDecoder();
-                let assistantText = '';
-                assistantContent.textContent = '';
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    assistantText += decoder.decode(value, { stream: true });
-                    assistantContent.textContent = assistantText;
-                    scrollToBottom();
-                }
-
-                assistantText += decoder.decode();
-                assistantContent.textContent = assistantText;
-                messages.push({ role: 'assistant', content: assistantText });
-            } catch (error) {
-                console.error(error);
-                addMessage(`Error: ${error.message}`);
-            } finally {
-                setLoading(false);
-                messageInput.focus();
-            }
-        });
-
-        messageInput.focus();
-    });
-</script>
+                <p class="chat-composer__hint">Press Enter to send. Use Shift+Enter for a new line.</p>
+            </form>
+        </section>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/chat_api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat_renderer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 {% endblock %}

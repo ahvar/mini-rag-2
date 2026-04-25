@@ -9,8 +9,26 @@ app/
 ├── main/          # View layer - HTML rendering
 ├── api/           # Data layer - JSON API endpoints
 ├── agents/        # Agent implementations
-└── templates/     # Jinja2 HTML templates
+├── templates/     # Jinja2 HTML templates
+└── static/        # Frontend JavaScript and CSS assets
 ```
+
+## Current Chat UI Boundaries
+
+These are current architectural facts and constraints, not roadmap items:
+
+- Flask remains the only application server.
+- The synchronous `/api/chat` route remains available as a fallback path.
+- The browser UI consumes streamed text from `/api/chat-stream`.
+- Focused API tests already cover the streaming route.
+
+## Frontend Change Guardrails
+
+Upcoming frontend work should preserve these rules:
+
+- Keep the Flask-rendered app structure; no React or build-tool migration is planned in this phase.
+- Preserve the existing route contracts for `/api/select-agent`, `/api/chat`, and `/api/chat-stream`.
+- Keep authentication, persistent chat history, WebSockets, and richer SSE framing out of scope for this phase.
 
 ## Routing Organization
 
