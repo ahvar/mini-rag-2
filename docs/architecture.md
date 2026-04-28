@@ -20,6 +20,7 @@ These are current architectural facts and constraints, not roadmap items:
 - Flask remains the only application server.
 - The synchronous `/api/chat` route remains available as a fallback path.
 - The browser UI consumes streamed text from `/api/chat-stream`.
+- `/api/chat-stream` may include compact RAG metadata in headers while keeping the body `text/plain`.
 - Focused API tests already cover the streaming route.
 
 ## Frontend Change Guardrails
@@ -28,6 +29,7 @@ Upcoming frontend work should preserve these rules:
 
 - Keep the Flask-rendered app structure; no React or build-tool migration is planned in this phase.
 - Preserve the existing route contracts for `/api/select-agent`, `/api/chat`, and `/api/chat-stream`.
+- Preserve the streamed body contract for `/api/chat-stream`; metadata should stay out of the text body.
 - Keep authentication, persistent chat history, WebSockets, and richer SSE framing out of scope for this phase.
 
 ## Routing Organization
@@ -153,35 +155,32 @@ These routes are responsible for:
    - Uses OpenAI to determine intent
    - Returns appropriate agent (`linkedin` or `rag`) and cleaned query
 
-6. **Call Chat API** (`index.html`)
+6. **Call Streaming Chat API** (`chat.js`)
    ```javascript
-   const chatResponse = await fetch('/api/chat', {
-       method: 'POST',
-       body: JSON.stringify({
-           messages,
-           agent: selectorData.agent,
-           query: selectorData.query
-       })
+   const streamResult = await chatApi.openChatStream({
+       messages: messages,
+       agent: selectorData.agent,
+       query: selectorData.query
    });
    ```
 
-7. **`chat_route()` executes selected agent** (`api/api_selectors.py`)
+7. **`chat_stream_route()` executes selected agent** (`api/api_selectors.py`)
    ```python
-   agent_executor = get_agent(agent)
+   agent_executor = get_streaming_agent(request_obj.type)
    result = agent_executor(request_obj)
-   return jsonify({
-       "agent": result.agent,
-       "response": result.content,
-       "context": result.context or []
-   })
+   response = Response(
+       stream_with_context(_stream_chat_chunks(result.stream)),
+       mimetype="text/plain",
+   )
    ```
 
-8. **Display response** (`index.html`)
+   For RAG responses, the route may also attach `X-Chat-Sources` with compact JSON source metadata.
+
+8. **Display streamed response** (`chat.js` + `chat_renderer.js`)
    ```javascript
-   const agentLabel = chatData.agent === 'linkedin' 
-       ? 'LinkedIn Agent' 
-       : 'RAG Agent';
-   addMessage(chatData.response, false, agentLabel);
+   const reader = streamResult.reader;
+   const sources = streamResult.sources;
+   // Read streamed text chunks, then render sources below the finalized assistant message.
    ```
 
 ## Key Architectural Decisions
@@ -196,7 +195,7 @@ app.register_blueprint(api_bp)
 ### Agent Pattern
 - **Registry**: `app/agents/registry.py` maintains available agents
 - **Configuration**: `app/agents/agent_config.py` defines agent descriptions
-- **Types**: `app/agents/agent_types.py` provides type safety with Pydantic
+- **Types**: `app/agents/agent_types.py` provides shared dataclass and typed-dict contracts
 
 ### Error Handling
 Both API routes return consistent error responses:

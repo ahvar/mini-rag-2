@@ -6,7 +6,11 @@ from collections.abc import Iterator
 
 from openai import OpenAI
 
-from app.agents.agent_types import AgentRequest, AgentResponse
+from app.agents.agent_types import (
+    AgentRequest,
+    AgentResponse,
+    StreamingAgentResponse,
+)
 from config import Config
 
 SYSTEM_PROMPT = (
@@ -22,7 +26,14 @@ def _build_prompt(request: AgentRequest) -> str:
     )
 
 
-def stream_linkedin_agent(request: AgentRequest) -> Iterator[str]:
+def _stream_openai_chunks(stream: Iterator) -> Iterator[str]:
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content or ""
+        if delta:
+            yield delta
+
+
+def stream_linkedin_agent(request: AgentRequest) -> StreamingAgentResponse:
     """Yield LinkedIn response chunks as they arrive from OpenAI."""
 
     model = Config.OPENAI_FINETUNED_MODEL
@@ -45,10 +56,7 @@ def stream_linkedin_agent(request: AgentRequest) -> Iterator[str]:
         stream=True,
     )
 
-    for chunk in stream:
-        delta = chunk.choices[0].delta.content or ""
-        if delta:
-            yield delta
+    return StreamingAgentResponse(stream=_stream_openai_chunks(stream))
 
 
 def linkedin_agent(request: AgentRequest) -> AgentResponse:

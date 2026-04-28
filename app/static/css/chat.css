@@ -300,6 +300,62 @@ body {
     margin-bottom: 0;
 }
 
+.chat-message__sources {
+    margin-top: 1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(125, 255, 155, 0.12);
+}
+
+.chat-message__sources[hidden] {
+    display: none;
+}
+
+.chat-message__sources-title {
+    margin-bottom: 0.65rem;
+    color: var(--chat-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.chat-message__sources-list {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.chat-message__sources-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid rgba(125, 255, 155, 0.12);
+    border-radius: 0.3rem;
+    background: rgba(125, 255, 155, 0.04);
+}
+
+.chat-message__sources-link {
+    color: var(--chat-accent);
+    text-decoration: none;
+    word-break: break-word;
+}
+
+.chat-message__sources-link:hover,
+.chat-message__sources-link:focus {
+    text-decoration: underline;
+}
+
+.chat-message__sources-score {
+    flex-shrink: 0;
+    color: var(--chat-muted);
+    font-size: 0.84rem;
+    font-variant-numeric: tabular-nums;
+}
+
 .chat-message__content p,
 .chat-message__content ul,
 .chat-message__content ol,
@@ -524,5 +580,10 @@ body {
 
     .chat-status-pill {
         display: none;
+    }
+
+    .chat-message__sources-item {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }

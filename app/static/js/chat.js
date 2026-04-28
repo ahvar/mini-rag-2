@@ -40,11 +40,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function streamChat(selectorData, assistantMessage) {
         const agentLabel = selectorData.agent === 'linkedin' ? 'LinkedIn Agent' : 'RAG Agent';
-        const reader = await chatApi.openChatStream({
+        const streamResult = await chatApi.openChatStream({
             messages: messages,
             agent: selectorData.agent,
             query: selectorData.query
         });
+        const reader = streamResult.reader;
+        const sources = streamResult.sources;
 
         const decoder = new TextDecoder();
         let assistantText = '';
@@ -65,10 +67,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         assistantText += decoder.decode();
+        assistantMessage.agentType = selectorData.agent;
+        assistantMessage.sourceItems = sources;
         renderer.updateMessage(assistantMessage, assistantText, {
             label: agentLabel,
             state: 'complete',
-            stateLabel: 'Complete'
+            stateLabel: 'Complete',
+            sources: sources
         });
         messages.push({ role: 'assistant', content: assistantText });
         setStatus('ready', 'Ready');
@@ -110,7 +115,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 renderer.updateMessage(assistantMessage, 'Error: ' + error.message, {
                     label: assistantMessage.label.textContent,
                     state: 'error',
-                    stateLabel: 'Error'
+                    stateLabel: 'Error',
+                    sources: []
                 });
             } else {
                 renderer.createMessageElement('Error: ' + error.message, {

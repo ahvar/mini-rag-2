@@ -1,22 +1,20 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+import json
 
-from langchain_openai import OpenAIEmbeddings
 from openai import OpenAI
 from pydantic import BaseModel
 
 from app.agents.agent_config import agent_configs
 from app.agents.registry import get_agent, get_streaming_agent
-from app.agents.agent_types import AgentRequest, AgentType, Message
+from app.agents.agent_types import AgentRequest, AgentType, Message, SourceReference
 from app.api import bp
-from app.main.pinecone_client import PineconeClient
 from config import Config
-from flask import Response, jsonify, request, stream_with_context, url_for
+from flask import Response, jsonify, request, stream_with_context
 
-EMBEDDING_MODEL = "text-embedding-3-small"
-EMBEDDING_DIMENSIONS = 512
 STREAMING_ERROR_MESSAGE = "\n\n[Streaming error]"
+CHAT_SOURCES_HEADER = "X-Chat-Sources"
 
 
 class AgentSelection(BaseModel):
@@ -122,6 +120,10 @@ def _stream_chat_chunks(stream: Iterator[str]) -> Iterator[str]:
         yield STREAMING_ERROR_MESSAGE
 
 
+def _serialize_sources(sources: list[SourceReference]) -> str:
+    return json.dumps(sources, separators=(",", ":"))
+
+
 @bp.route("/api/select-agent", methods=["POST"])
 def select_agent_route():
     try:
@@ -148,13 +150,14 @@ def chat_route():
 
         agent_executor = get_agent(request_obj.type)
         result = agent_executor(request_obj)
-        return jsonify(
-            {
-                "agent": result.agent,
-                "response": result.content,
-                "context": result.context or [],
-            }
-        )
+        payload = {
+            "agent": result.agent,
+            "response": result.content,
+            "context": result.context or [],
+        }
+        if result.sources is not None:
+            payload["sources"] = result.sources
+        return jsonify(payload)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception:
@@ -167,11 +170,15 @@ def chat_stream_route():
         body = _get_request_body()
         request_obj = _build_agent_request(body)
         agent_executor = get_streaming_agent(request_obj.type)
+        result = agent_executor(request_obj)
 
-        return Response(
-            stream_with_context(_stream_chat_chunks(agent_executor(request_obj))),
+        response = Response(
+            stream_with_context(_stream_chat_chunks(result.stream)),
             mimetype="text/plain",
         )
+        if result.sources:
+            response.headers[CHAT_SOURCES_HEADER] = _serialize_sources(result.sources)
+        return response
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception:

@@ -190,6 +190,69 @@ window.createChatRenderer = function createChatRenderer(options) {
         }
     }
 
+    function formatSourceScore(score) {
+        if (typeof score !== 'number' || !Number.isFinite(score)) {
+            return '';
+        }
+
+        return score.toFixed(2);
+    }
+
+    function renderSources(target, sources) {
+        clearElement(target);
+
+        if (!Array.isArray(sources) || sources.length === 0) {
+            target.hidden = true;
+            return;
+        }
+
+        const validSources = sources.filter(function(source) {
+            return source
+                && typeof source.title === 'string'
+                && typeof source.url === 'string'
+                && /^https?:\/\//i.test(source.url);
+        });
+
+        if (validSources.length === 0) {
+            target.hidden = true;
+            return;
+        }
+
+        const heading = document.createElement('div');
+        heading.className = 'chat-message__sources-title';
+        heading.textContent = 'Sources';
+        target.appendChild(heading);
+
+        const list = document.createElement('ul');
+        list.className = 'chat-message__sources-list';
+
+        validSources.forEach(function(source) {
+            const item = document.createElement('li');
+            item.className = 'chat-message__sources-item';
+
+            const link = document.createElement('a');
+            link.className = 'chat-message__sources-link';
+            link.href = source.url;
+            link.target = '_blank';
+            link.rel = 'noreferrer noopener';
+            link.textContent = source.title;
+            item.appendChild(link);
+
+            const scoreLabel = formatSourceScore(source.score);
+            if (scoreLabel) {
+                const score = document.createElement('span');
+                score.className = 'chat-message__sources-score';
+                score.textContent = scoreLabel;
+                item.appendChild(score);
+            }
+
+            list.appendChild(item);
+        });
+
+        target.appendChild(list);
+        target.hidden = false;
+    }
+
     function updateMessage(messageNode, message, options) {
         const settings = options || {};
         messageNode.wrapper.dataset.state = settings.state || messageNode.wrapper.dataset.state || 'complete';
@@ -203,6 +266,9 @@ window.createChatRenderer = function createChatRenderer(options) {
             messageNode.content.textContent = message;
         } else {
             renderMarkdown(message, messageNode.content);
+            if (Object.prototype.hasOwnProperty.call(settings, 'sources')) {
+                renderSources(messageNode.sourceContainer, settings.sources);
+            }
         }
 
         scrollToBottom();
@@ -233,15 +299,20 @@ window.createChatRenderer = function createChatRenderer(options) {
 
         const content = document.createElement('div');
         content.className = 'chat-message__content';
+        const sources = document.createElement('section');
+        sources.className = 'chat-message__sources';
+        sources.hidden = true;
 
         bubble.appendChild(meta);
         bubble.appendChild(content);
+        bubble.appendChild(sources);
         wrapper.appendChild(bubble);
         messagesArea.appendChild(wrapper);
 
         const messageNode = {
             wrapper: wrapper,
             content: content,
+            sourceContainer: sources,
             state: state,
             label: author,
             isUser: Boolean(settings.isUser)

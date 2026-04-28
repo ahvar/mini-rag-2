@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Callable, Dict, cast
+from typing import Any, Callable, Dict, cast
+from urllib.parse import urlparse
 
 from langchain_openai import OpenAIEmbeddings
 from openai import OpenAI
 
-from app.agents.agent_types import AgentRequest, AgentResponse, AgentType
+from app.agents.agent_types import (
+    AgentRequest,
+    AgentResponse,
+    AgentType,
+    RagContextItem,
+    SourceReference,
+    StreamingAgentResponse,
+)
 from app.agents.linkedin import linkedin_agent, stream_linkedin_agent
 from app.main.pinecone_client import PineconeClient
 from config import Config
@@ -17,7 +25,7 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 512
 
 AgentExecutor = Callable[[AgentRequest], AgentResponse]
-StreamingAgentExecutor = Callable[[AgentRequest], Iterator[str]]
+StreamingAgentExecutor = Callable[[AgentRequest], StreamingAgentResponse]
 
 
 def _messages_to_openai(messages: list[dict]) -> list[dict[str, str]]:
@@ -27,7 +35,77 @@ def _messages_to_openai(messages: list[dict]) -> list[dict[str, str]]:
     ]
 
 
-def _build_rag_context(request: AgentRequest) -> tuple[list[dict], list[str]]:
+def _extract_match_metadata(match: Any) -> dict[str, Any]:
+    metadata = (
+        match.get("metadata")
+        if isinstance(match, dict)
+        else getattr(match, "metadata", {})
+    )
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _extract_match_text(metadata: dict[str, Any]) -> str:
+    text = metadata.get("text") or metadata.get("chunk")
+    return text.strip() if isinstance(text, str) else ""
+
+
+def _normalize_source_url(metadata: dict[str, Any]) -> str | None:
+    raw_url = metadata.get("url") or metadata.get("source")
+    if not isinstance(raw_url, str):
+        return None
+
+    url = raw_url.strip()
+    if not url:
+        return None
+
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+
+    return url
+
+
+def _build_source_title(metadata: dict[str, Any], url: str | None) -> str:
+    raw_title = metadata.get("title")
+    if isinstance(raw_title, str) and raw_title.strip():
+        return raw_title.strip()
+
+    raw_source = metadata.get("source")
+    if isinstance(raw_source, str) and raw_source.strip():
+        return raw_source.strip()
+
+    if url:
+        hostname = urlparse(url).netloc
+        if hostname:
+            return hostname
+
+    return "Untitled"
+
+
+def _build_source_reference(
+    metadata: dict[str, Any], score: float | None
+) -> SourceReference | None:
+    url = _normalize_source_url(metadata)
+    if url is None:
+        return None
+
+    return {
+        "title": _build_source_title(metadata, url),
+        "url": url,
+        "score": score,
+    }
+
+
+def _iter_openai_chunks(stream: Iterator[Any]) -> Iterator[str]:
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content or ""
+        if delta:
+            yield delta
+
+
+def _build_rag_context(
+    request: AgentRequest,
+) -> tuple[list[RagContextItem], list[str], list[SourceReference]]:
     embeddings_client = OpenAIEmbeddings(
         model=EMBEDDING_MODEL,
         dimensions=EMBEDDING_DIMENSIONS,
@@ -49,41 +127,57 @@ def _build_rag_context(request: AgentRequest) -> tuple[list[dict], list[str]]:
     if matches is None and isinstance(query_response, dict):
         matches = query_response.get("matches", [])
 
-    documents = []
+    documents: list[dict[str, Any]] = []
     for match in matches or []:
-        metadata = (
-            match.get("metadata")
-            if isinstance(match, dict)
-            else getattr(match, "metadata", {})
-        )
-        text = metadata.get("text") or metadata.get("chunk") or str(metadata)
+        metadata = _extract_match_metadata(match)
+        text = _extract_match_text(metadata)
         if text:
-            documents.append(text)
-
-    reranked = pinecone_client.rerank(
-        model="bge-reranker-v2-m3",
-        query=request.query,
-        documents=documents,
-        top_n=Config.RAG_TOP_K,
-        return_documents=True,
-    )
-
-    contexts: list[dict] = []
-    snippets: list[str] = []
-    for result in reranked.get("data", []):
-        document = result.get("document", {})
-        text = document.get("text", "")
-        if text:
-            snippets.append(f"- {text}")
-            contexts.append(
+            documents.append(
                 {
-                    "index": result.get("index"),
-                    "score": result.get("score"),
+                    "metadata": metadata,
                     "text": text,
                 }
             )
 
-    return contexts, snippets
+    if not documents:
+        return [], [], []
+
+    reranked = pinecone_client.rerank(
+        model="bge-reranker-v2-m3",
+        query=request.query,
+        documents=[document["text"] for document in documents],
+        top_n=Config.RAG_TOP_K,
+        return_documents=True,
+    )
+
+    contexts: list[RagContextItem] = []
+    snippets: list[str] = []
+    sources: list[SourceReference] = []
+    seen_source_urls: set[str] = set()
+    for result in reranked.get("data", []):
+        index = result.get("index")
+        if not isinstance(index, int) or index < 0 or index >= len(documents):
+            continue
+
+        document = documents[index]
+        text = document["text"]
+        score_value = result.get("score")
+        score = float(score_value) if isinstance(score_value, (int, float)) else None
+        if text:
+            snippets.append(f"- {text}")
+            contexts.append(
+                {
+                    "index": index,
+                    "score": score,
+                    "text": text,
+                }
+            )
+            source = _build_source_reference(document["metadata"], score)
+            if source is not None and source["url"] not in seen_source_urls:
+                seen_source_urls.add(source["url"])
+                sources.append(source)
+
+    return contexts, snippets, sources
 
 
 def _build_rag_messages(
@@ -108,10 +202,10 @@ def _build_rag_messages(
     ]
 
 
-def stream_rag_agent(request: AgentRequest) -> Iterator[str]:
+def stream_rag_agent(request: AgentRequest) -> StreamingAgentResponse:
     """Yield RAG response chunks after retrieval and reranking."""
 
-    _, snippets = _build_rag_context(request)
+    _, snippets, sources = _build_rag_context(request)
 
     client = OpenAI(api_key=Config.OPENAI_API_KEY)
     stream = client.chat.completions.create(
@@ -121,14 +215,14 @@ def stream_rag_agent(request: AgentRequest) -> Iterator[str]:
         stream=True,
     )
 
-    for chunk in stream:
-        delta = chunk.choices[0].delta.content or ""
-        if delta:
-            yield delta
+    return StreamingAgentResponse(
+        stream=_iter_openai_chunks(stream),
+        sources=sources,
+    )
 
 
 def rag_agent(request: AgentRequest) -> AgentResponse:
-    contexts, snippets = _build_rag_context(request)
+    contexts, snippets, sources = _build_rag_context(request)
 
     client = OpenAI(api_key=Config.OPENAI_API_KEY)
     completion = client.chat.completions.create(
@@ -141,6 +235,7 @@ def rag_agent(request: AgentRequest) -> AgentResponse:
         agent="rag",
         content=completion.choices[0].message.content or "",
         context=contexts,
+        sources=sources,
     )
 
 
