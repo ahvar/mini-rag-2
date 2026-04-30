@@ -33,7 +33,7 @@ langchain-community==0.4.1
 langchain-core==1.2.21
 langchain-openai==1.1.12
 langchain-text-splitters==1.1.1
-langsmith==0.7.22
+langsmith==0.7.38
 load-dotenv==0.1.0
 markdown-it-py==4.0.0
 marshmallow==3.26.2

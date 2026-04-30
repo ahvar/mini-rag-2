@@ -3,13 +3,14 @@ from __future__ import annotations
 from collections.abc import Iterator
 import json
 
-from openai import OpenAI
 from pydantic import BaseModel
 
 from app.agents.agent_config import agent_configs
 from app.agents.registry import get_agent, get_streaming_agent
 from app.agents.agent_types import AgentRequest, AgentType, Message, SourceReference
 from app.api import bp
+from app.integrations.langsmith import serialize_selector_inputs, traceable
+from app.integrations.openai import create_openai_client
 from config import Config
 from flask import Response, jsonify, request, stream_with_context
 
@@ -22,6 +23,11 @@ class AgentSelection(BaseModel):
     query: str
 
 
+@traceable(
+    name="select_agent",
+    run_type="tool",
+    process_inputs=serialize_selector_inputs,
+)
 def select_agent(messages: list[Message]) -> tuple[AgentType, str]:
     recent_messages = messages[-5:]
     agent_descriptions = "\n".join(
@@ -34,7 +40,7 @@ def select_agent(messages: list[Message]) -> tuple[AgentType, str]:
         "Choose only one agent from: linkedin or rag."
     )
 
-    client = OpenAI(api_key=Config.OPENAI_API_KEY)
+    client = create_openai_client()
     response = client.beta.chat.completions.parse(
         model=Config.BASE_MODEL,
         response_format=AgentSelection,
