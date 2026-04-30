@@ -27,9 +27,11 @@ class TestApiSelectors:
 
         with (
             mock.patch("app.api.api_selectors.Config", TestConfig),
-            mock.patch("app.api.api_selectors.OpenAI") as MockOpenAI,
+            mock.patch(
+                "app.api.api_selectors.create_openai_client"
+            ) as mock_create_openai_client,
         ):
-            client = MockOpenAI.return_value
+            client = mock_create_openai_client.return_value
             client.beta.chat.completions.parse.return_value = SimpleNamespace(
                 choices=[
                     SimpleNamespace(
@@ -45,7 +47,7 @@ class TestApiSelectors:
 
             agent, query = select_agent(messages)
 
-            MockOpenAI.assert_called_once_with(api_key=TestConfig.OPENAI_API_KEY)
+            mock_create_openai_client.assert_called_once_with()
             client.beta.chat.completions.parse.assert_called_once()
             _, kwargs = client.beta.chat.completions.parse.call_args
             assert kwargs["response_format"] is api_selectors.AgentSelection
@@ -62,16 +64,18 @@ class TestApiSelectors:
 
         with (
             mock.patch("app.api.api_selectors.Config", TestConfig),
-            mock.patch("app.api.api_selectors.OpenAI") as MockOpenAI,
+            mock.patch(
+                "app.api.api_selectors.create_openai_client"
+            ) as mock_create_openai_client,
         ):
-            client = MockOpenAI.return_value
+            client = mock_create_openai_client.return_value
             client.beta.chat.completions.parse.return_value = SimpleNamespace(
                 choices=[SimpleNamespace(message=SimpleNamespace(parsed=None))]
             )
 
             agent, query = select_agent(messages)
 
-            MockOpenAI.assert_called_once_with(api_key=TestConfig.OPENAI_API_KEY)
+            mock_create_openai_client.assert_called_once_with()
             assert agent == "rag"
             assert query == "What is retrieval augmented generation?"
 
@@ -79,8 +83,8 @@ class TestApiSelectors:
         with mock.patch(
             "app.api.api_selectors.get_streaming_agent"
         ) as mock_get_streaming_agent:
-            mock_get_streaming_agent.return_value = lambda request: StreamingAgentResponse(
-                stream=iter(["Hello", " world"])
+            mock_get_streaming_agent.return_value = (
+                lambda request: StreamingAgentResponse(stream=iter(["Hello", " world"]))
             )
 
             response = self.app.test_client().post(
@@ -111,9 +115,11 @@ class TestApiSelectors:
         with mock.patch(
             "app.api.api_selectors.get_streaming_agent"
         ) as mock_get_streaming_agent:
-            mock_get_streaming_agent.return_value = lambda request: StreamingAgentResponse(
-                stream=iter(["Hello"]),
-                sources=sources,
+            mock_get_streaming_agent.return_value = (
+                lambda request: StreamingAgentResponse(
+                    stream=iter(["Hello"]),
+                    sources=sources,
+                )
             )
 
             response = self.app.test_client().post(
@@ -137,8 +143,8 @@ class TestApiSelectors:
         with mock.patch(
             "app.api.api_selectors.get_streaming_agent"
         ) as mock_get_streaming_agent:
-            mock_get_streaming_agent.return_value = lambda request: StreamingAgentResponse(
-                stream=iter(["Hello"])
+            mock_get_streaming_agent.return_value = (
+                lambda request: StreamingAgentResponse(stream=iter(["Hello"]))
             )
 
             response = self.app.test_client().post(

@@ -4,13 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from openai import OpenAI
-
 from app.agents.agent_types import (
     AgentRequest,
     AgentResponse,
     StreamingAgentResponse,
 )
+from app.integrations.langsmith import (
+    serialize_agent_request_inputs,
+    serialize_agent_response,
+    serialize_streaming_agent_response,
+    traceable,
+)
+from app.integrations.openai import create_openai_client
 from config import Config
 
 SYSTEM_PROMPT = (
@@ -33,6 +38,12 @@ def _stream_openai_chunks(stream: Iterator) -> Iterator[str]:
             yield delta
 
 
+@traceable(
+    name="stream_linkedin_agent",
+    run_type="chain",
+    process_inputs=serialize_agent_request_inputs,
+    process_outputs=serialize_streaming_agent_response,
+)
 def stream_linkedin_agent(request: AgentRequest) -> StreamingAgentResponse:
     """Yield LinkedIn response chunks as they arrive from OpenAI."""
 
@@ -45,7 +56,7 @@ def stream_linkedin_agent(request: AgentRequest) -> StreamingAgentResponse:
 
     prompt = _build_prompt(request)
 
-    client = OpenAI(api_key=Config.OPENAI_API_KEY)
+    client = create_openai_client()
     stream = client.chat.completions.create(
         model=model,
         messages=[
@@ -59,6 +70,12 @@ def stream_linkedin_agent(request: AgentRequest) -> StreamingAgentResponse:
     return StreamingAgentResponse(stream=_stream_openai_chunks(stream))
 
 
+@traceable(
+    name="linkedin_agent",
+    run_type="chain",
+    process_inputs=serialize_agent_request_inputs,
+    process_outputs=serialize_agent_response,
+)
 def linkedin_agent(request: AgentRequest) -> AgentResponse:
     """Generate a LinkedIn post from user intent and selector-refined query.
     NOTE:
@@ -75,7 +92,7 @@ def linkedin_agent(request: AgentRequest) -> AgentResponse:
             "Set it in .env (e.g. ft:gpt-4o-mini-2024-07-18:org:model:id)."
         )
 
-    client = OpenAI(api_key=Config.OPENAI_API_KEY)
+    client = create_openai_client()
     completion = client.chat.completions.create(
         model=model,
         messages=[

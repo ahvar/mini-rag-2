@@ -7,7 +7,6 @@ from typing import Any, Callable, Dict, cast
 from urllib.parse import urlparse
 
 from langchain_openai import OpenAIEmbeddings
-from openai import OpenAI
 
 from app.agents.agent_types import (
     AgentRequest,
@@ -18,6 +17,14 @@ from app.agents.agent_types import (
     StreamingAgentResponse,
 )
 from app.agents.linkedin import linkedin_agent, stream_linkedin_agent
+from app.integrations.langsmith import (
+    serialize_agent_request_inputs,
+    serialize_agent_response,
+    serialize_rag_context_output,
+    serialize_streaming_agent_response,
+    traceable,
+)
+from app.integrations.openai import create_openai_client
 from app.main.pinecone_client import PineconeClient
 from config import Config
 
@@ -103,6 +110,12 @@ def _iter_openai_chunks(stream: Iterator[Any]) -> Iterator[str]:
             yield delta
 
 
+@traceable(
+    name="build_rag_context",
+    run_type="retriever",
+    process_inputs=serialize_agent_request_inputs,
+    process_outputs=serialize_rag_context_output,
+)
 def _build_rag_context(
     request: AgentRequest,
 ) -> tuple[list[RagContextItem], list[str], list[SourceReference]]:
@@ -202,12 +215,18 @@ def _build_rag_messages(
     ]
 
 
+@traceable(
+    name="stream_rag_agent",
+    run_type="chain",
+    process_inputs=serialize_agent_request_inputs,
+    process_outputs=serialize_streaming_agent_response,
+)
 def stream_rag_agent(request: AgentRequest) -> StreamingAgentResponse:
     """Yield RAG response chunks after retrieval and reranking."""
 
     _, snippets, sources = _build_rag_context(request)
 
-    client = OpenAI(api_key=Config.OPENAI_API_KEY)
+    client = create_openai_client()
     stream = client.chat.completions.create(
         model=Config.BASE_MODEL,
         messages=_build_rag_messages(request, snippets),
@@ -221,10 +240,16 @@ def stream_rag_agent(request: AgentRequest) -> StreamingAgentResponse:
     )
 
 
+@traceable(
+    name="rag_agent",
+    run_type="chain",
+    process_inputs=serialize_agent_request_inputs,
+    process_outputs=serialize_agent_response,
+)
 def rag_agent(request: AgentRequest) -> AgentResponse:
     contexts, snippets, sources = _build_rag_context(request)
 
-    client = OpenAI(api_key=Config.OPENAI_API_KEY)
+    client = create_openai_client()
     completion = client.chat.completions.create(
         model=Config.BASE_MODEL,
         messages=_build_rag_messages(request, snippets),
